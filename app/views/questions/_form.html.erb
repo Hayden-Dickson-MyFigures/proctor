@@ -55,12 +55,7 @@
     </p>
   </div>
 
-  <%# Branching UI block: %>
-  <%# - Checkbox toggles branching via Stimulus (change->question-form#toggleBranchingField). %>
-  <%# - Hidden field :branch carries a JSON map built client-side before submit. %>
-  <%# - data-questions supplies [{id,label}] for the "go to" <select> options. %>
-  <%# - Rows are injected into #branching-rows by Stimulus; blank = default flow, END = terminate. %>
-  <%# - Security: labels are HTML-escaped in JS before insertion to prevent XSS. %>
+
   <div class="mt-4">
     <div class="flex items-start">
       <div class="flex items-center h-5">
