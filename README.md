@@ -129,3 +129,22 @@ These components are located in the `app/javascript/components` directory.
 Please fork this github repo, and include your solution as a PR to the forked repo with clear instructions on how to run your code. Include any notes or explanations in the README or as comments in your code.
 
 Good luck!
+
+
+
+## Solution
+
+Adding Branching Functionality
+Survey Customization Update
+
+Implemeted a premade survey Role-Based Assessment Survey. This would allow the user to pick a role and then get questions based on the role they selected.
+
+Implemented branching logic for surveys, allowing dynamic question flows based on user responses.
+
+Added full custom survey creation, enabling flexible question design and configuration.
+
+Introduced branch routing, so each question can direct participants to specific follow-up questions or paths.
+
+Integrated an automated summary at the end of every survey to display collected responses in a concise format.
+
+To run this code we just use this command in the terminal: bin/dev
