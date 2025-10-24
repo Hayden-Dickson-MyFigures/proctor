@@ -7,5 +7,9 @@ import { application } from "./application"
 // import HelloController from "./hello_controller"
 // application.register("hello", HelloController)
 
+// Register question form controller
+import QuestionFormController from "./question_form_controller"
+application.register("question-form", QuestionFormController)
+
 // This is a placeholder for future controller registrations
-// When you create a new controller, import it above and register it here 
+// When you create a new controller, import it above and register it here

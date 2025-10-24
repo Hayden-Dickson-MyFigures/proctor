@@ -49,7 +49,7 @@ class QuestionsController < ApplicationController
   end
   
   def question_params
-    params.require(:question).permit(:content, :question_type, :position, :required, options: [])
+    params.require(:question).permit(:content, :question_type, :position, :required, :branch, options: [])
   end
   
   def process_options

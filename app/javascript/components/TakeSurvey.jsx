@@ -101,6 +101,10 @@ const TakeSurvey = (props) => {
   const [submitting, setSubmitting] = useState(false);
   const [errors, setErrors] = useState([]);
   const [submitted, setSubmitted] = useState(false);
+  const [submissionDetails, setSubmissionDetails] = useState(null);
+  const [currentQuestionId, setCurrentQuestionId] = useState(questions[0]?.id || null);
+  const [finished, setFinished] = useState(false);
+  const [visitedQuestionIds, setVisitedQuestionIds] = useState(currentQuestionId ? [currentQuestionId] : []);
 
   const handleInputChange = (questionId, value) => {
     setResponses({
@@ -109,14 +113,116 @@ const TakeSurvey = (props) => {
     });
   };
 
+  const getQuestionById = (id) => questions.find(q => q.id === id);
+
+  const parseBranchMapping = (question) => {
+    if (!question || !question.branch) return {};
+    try {
+      return JSON.parse(question.branch) || {};
+    } catch (e) {
+      return {};
+    }
+  };
+
+  const getNextDefaultQuestionId = (currentId) => {
+    const index = questions.findIndex(q => q.id === currentId);
+    if (index === -1) return null;
+    const next = questions[index + 1];
+    return next ? next.id : null;
+  };
+
+  const resolveNextQuestionId = (question, answerValue) => {
+    const mapping = parseBranchMapping(question);
+    let target = '';
+
+    if (Array.isArray(answerValue)) {
+      // For checkboxes, use the first mapped selection if any
+      for (const val of answerValue) {
+        if (mapping[val] !== undefined && mapping[val] !== '') {
+          target = mapping[val];
+          break;
+        }
+      }
+    } else if (answerValue != null) {
+      const key = String(answerValue);
+      if (mapping[key] !== undefined && mapping[key] !== '') {
+        target = mapping[key];
+      }
+    }
+
+    if (target === 'END') return null;
+    if (target) {
+      const asNum = parseInt(target, 10);
+      return Number.isNaN(asNum) ? null : asNum;
+    }
+
+    // Support default branch for text/long_text via wildcard '*'
+    if (mapping['*'] !== undefined && mapping['*'] !== '') {
+      const any = mapping['*']
+      if (any === 'END') return null;
+      const asNum2 = parseInt(any, 10)
+      return Number.isNaN(asNum2) ? null : asNum2
+    }
+
+    return getNextDefaultQuestionId(question.id);
+  };
+
+  const goToNext = (explicitValue) => {
+    setErrors([]);
+    const currentQuestion = getQuestionById(currentQuestionId);
+    if (!currentQuestion) {
+      setFinished(true);
+      return;
+    }
+    const value = explicitValue !== undefined ? explicitValue : responses[currentQuestion.id];
+    if (currentQuestion.required && (value === undefined || value === null || (Array.isArray(value) ? value.length === 0 : String(value).trim() === ''))) {
+      setErrors(['Please answer the required question before continuing.']);
+      return;
+    }
+
+    const nextId = resolveNextQuestionId(currentQuestion, value);
+    if (nextId == null) {
+      // Defer finishing to next tick to prevent the same click from hitting a new submit button
+      setTimeout(() => setFinished(true), 0);
+      return;
+    }
+    setCurrentQuestionId(nextId);
+    setVisitedQuestionIds((prev) => {
+      const idx = prev.indexOf(currentQuestionId);
+      const base = idx >= 0 ? prev.slice(0, idx + 1) : prev;
+      return [...base, nextId];
+    });
+    window.scrollTo(0, 0);
+  };
+
+  const goBack = () => {
+    setErrors([]);
+    if (!currentQuestionId && visitedQuestionIds.length > 0) {
+      // If somehow current is null but we have history, go to last
+      setCurrentQuestionId(visitedQuestionIds[visitedQuestionIds.length - 1]);
+      setFinished(false);
+      return;
+    }
+    const idx = visitedQuestionIds.indexOf(currentQuestionId);
+    if (idx > 0) {
+      setCurrentQuestionId(visitedQuestionIds[idx - 1]);
+      setFinished(false);
+      window.scrollTo(0, 0);
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitting(true);
     setErrors([]);
 
     // Validate responses
-    const requiredQuestions = questions.filter(q => q.required);
-    const missingResponses = requiredQuestions.filter(q => !responses[q.id]);
+    const requiredQuestions = questions.filter(q => q.required && visitedQuestionIds.includes(q.id));
+    const missingResponses = requiredQuestions.filter(q => {
+      const val = responses[q.id];
+      if (Array.isArray(val)) return val.length === 0;
+      return !val;
+    });
     
     if (missingResponses.length > 0) {
       setErrors(['Please answer all required questions.']);
@@ -148,6 +254,18 @@ const TakeSurvey = (props) => {
       });
 
       if (response.ok) {
+        // Save submission details locally
+        const details = visitedQuestionIds.map((qid) => {
+          const q = questions.find((qq) => qq.id === qid);
+          return {
+            id: qid,
+            content: q?.content,
+            question_type: q?.question_type,
+            value: responses[qid]
+          };
+        });
+        setSubmissionDetails(details);
+
         setSubmitted(true);
         window.scrollTo(0, 0);
       } else {
@@ -216,7 +334,7 @@ const TakeSurvey = (props) => {
                       className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
                       value={option}
                       checked={responses[question.id] === option}
-                      onChange={() => handleInputChange(question.id, option)}
+                      onChange={() => { handleInputChange(question.id, option); }}
                       required={question.required}
                     />
                     <label htmlFor={`question_${question.id}_option_${index}`} className="ml-3 block text-sm text-gray-700">
@@ -293,7 +411,7 @@ const TakeSurvey = (props) => {
                         className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
                         value={rating.toString()}
                         checked={responses[question.id] === rating.toString()}
-                        onChange={() => handleInputChange(question.id, rating.toString())}
+                        onChange={() => { handleInputChange(question.id, rating.toString()); }}
                         required={question.required}
                       />
                       <label htmlFor={`question_${question.id}_rating_${rating}`} className="mt-1 text-sm text-gray-700">
@@ -322,22 +440,40 @@ const TakeSurvey = (props) => {
 
   if (submitted) {
     return (
-      <div className="bg-green-50 border-l-4 border-green-400 p-4 mb-4">
-        <div className="flex">
-          <div className="flex-shrink-0">
-            <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-            </svg>
-          </div>
-          <div className="ml-3">
-            <p className="text-sm text-green-700">
-              Thank you for completing the survey!
-            </p>
+      <div>
+        <div className="bg-green-50 border-l-4 border-green-400 p-4 mb-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-green-700">Thank you for completing the survey!</p>
+            </div>
           </div>
         </div>
+
+        {submissionDetails && (
+          <div className="p-4 bg-white rounded shadow">
+            <div className="font-semibold text-gray-900 mb-3">Your submission</div>
+            <div className="space-y-3">
+              {submissionDetails.map((d) => (
+                <div key={d.id}>
+                  <div className="text-sm font-medium text-gray-800">{d.content}</div>
+                  <div className="text-sm text-gray-600">
+                    {Array.isArray(d.value) ? d.value.join(', ') : String(d.value || '')}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     );
   }
+
+  const currentQuestion = currentQuestionId != null ? questions.find(q => q.id === currentQuestionId) : null;
 
   return (
     <div>
@@ -363,21 +499,74 @@ const TakeSurvey = (props) => {
         </div>
       )}
       
-      <form onSubmit={handleSubmit}>
-        {questions.map(question => (
-          <div key={question.id} className="mb-6 p-4 bg-white shadow rounded">
-            {renderQuestion(question)}
+      <form onSubmit={handleSubmit} onKeyDown={(e) => { if (!finished && e.key === 'Enter') e.preventDefault(); }}>
+        {!finished && currentQuestion && (
+          <div key={currentQuestion.id} className="mb-6 p-4 bg-white shadow rounded">
+            {renderQuestion(currentQuestion)}
           </div>
-        ))}
-        
+        )}
+
         <div className="mt-6">
-          <button
-            type="submit"
-            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
-            disabled={submitting}
-          >
-            {submitting ? 'Submitting...' : 'Submit Response'}
-          </button>
+          {(() => {
+            const canGoBack = (() => {
+              if (finished) return visitedQuestionIds.length > 1;
+              if (!currentQuestion) return false;
+              const idx = visitedQuestionIds.indexOf(currentQuestion.id);
+              return idx > 0;
+            })();
+
+            if (finished) {
+              return (
+                <>
+                  {canGoBack && (
+                    <button
+                      type="button"
+                      onClick={goBack}
+                      className="mr-3 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+                    >
+                      Back
+                    </button>
+                  )}
+                  <button
+                    type="submit"
+                    className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+                    disabled={submitting}
+                  >
+                    {submitting ? 'Submitting...' : 'Submit Response'}
+                  </button>
+                </>
+              );
+            }
+
+            if (!currentQuestion) return null;
+
+            const currentVal = responses[currentQuestion.id];
+            const nextDisabled = !!currentQuestion.required && (
+              currentVal === undefined || currentVal === null || (Array.isArray(currentVal) ? currentVal.length === 0 : String(currentVal).trim() === '')
+            );
+
+            return (
+              <>
+                {canGoBack && (
+                  <button
+                    type="button"
+                    onClick={goBack}
+                    className="mr-3 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+                  >
+                    Back
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => goToNext()}
+                  disabled={nextDisabled}
+                  className={`${nextDisabled ? 'opacity-50 cursor-not-allowed ' : ''}bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline`}
+                >
+                  Next
+                </button>
+              </>
+            );
+          })()}
         </div>
       </form>
     </div>

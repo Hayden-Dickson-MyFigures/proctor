@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[7.0].define(version: 2025_03_17_163201) do
+ActiveRecord::Schema[7.0].define(version: 2025_10_23_003422) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "plpgsql"
 
@@ -23,6 +23,7 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_17_163201) do
     t.datetime "updated_at", null: false
     t.text "options"
     t.boolean "required"
+    t.string "branch"
     t.index ["survey_id"], name: "index_questions_on_survey_id"
   end
 
@@ -32,6 +33,8 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_17_163201) do
     t.text "value"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "branch"
+    t.string "session_id"
     t.index ["question_id"], name: "index_responses_on_question_id"
     t.index ["survey_id"], name: "index_responses_on_survey_id"
   end
@@ -41,6 +44,7 @@ ActiveRecord::Schema[7.0].define(version: 2025_03_17_163201) do
     t.text "description"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.text "branches"
   end
 
   add_foreign_key "questions", "surveys"

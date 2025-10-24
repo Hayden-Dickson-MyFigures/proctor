@@ -55,6 +55,8 @@ class SurveysController < ApplicationController
       redirect_to take_survey_path(@survey), alert: 'Please answer at least one question.'
     end
   end
+
+  
   
   private
   
