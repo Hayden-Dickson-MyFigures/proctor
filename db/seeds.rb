@@ -241,3 +241,132 @@ customer_questions.each do |question_attrs|
 end
 
 puts "Seed data created successfully!"
+
+# -----------------------------------------------------------------------------
+# Role-based assessment survey with audience branching
+# -----------------------------------------------------------------------------
+puts "Creating role-based assessment survey..."
+role_based_survey = Survey.create!(
+  title: "Role-Based Assessment",
+  description: "Select your role to receive a tailored set of questions.",
+  branches: ["Data Engineer", "Frontend Engineer", "Product Manager"]
+)
+
+# 1) Role selection question (branching entry point)
+role_selector = role_based_survey.questions.create!(
+  content: "Which role best describes you?",
+  question_type: "multiple_choice",
+  position: 1,
+  required: true,
+  options: ["Data Engineer", "Frontend Engineer", "Product Manager"]
+)
+
+# Helper to create a block of questions for a given audience. Returns first and last question records.
+def create_audience_block!(survey:, audience:, starting_position:)
+  questions = []
+
+  case audience
+  when "Data Engineer"
+    questions << survey.questions.create!(
+      content: "Which data tools do you use regularly?",
+      question_type: "checkbox",
+      position: starting_position,
+      required: true,
+      options: ["dbt", "Airflow", "Spark", "Fivetran", "Snowflake Tasks", "Other"],
+      audience_branch: audience
+    )
+    questions << survey.questions.create!(
+      content: "How comfortable are you with SQL?",
+      question_type: "rating",
+      position: starting_position + 1,
+      required: true,
+      audience_branch: audience
+    )
+    questions << survey.questions.create!(
+      content: "Briefly describe your data warehousing experience.",
+      question_type: "long_text",
+      position: starting_position + 2,
+      required: false,
+      audience_branch: audience
+    )
+  when "Frontend Engineer"
+    questions << survey.questions.create!(
+      content: "Which frontend frameworks do you actively use?",
+      question_type: "checkbox",
+      position: starting_position,
+      required: true,
+      options: ["React", "Next.js", "Vue", "Angular", "Svelte", "Other"],
+      audience_branch: audience
+    )
+    questions << survey.questions.create!(
+      content: "How comfortable are you with React?",
+      question_type: "rating",
+      position: starting_position + 1,
+      required: true,
+      audience_branch: audience
+    )
+    questions << survey.questions.create!(
+      content: "What's your biggest UI/UX challenge lately?",
+      question_type: "text",
+      position: starting_position + 2,
+      required: false,
+      audience_branch: audience
+    )
+  when "Product Manager"
+    questions << survey.questions.create!(
+      content: "Which development methodology do you primarily use?",
+      question_type: "multiple_choice",
+      position: starting_position,
+      required: true,
+      options: ["Scrum", "Kanban", "Lean", "Waterfall", "Hybrid"],
+      audience_branch: audience
+    )
+    questions << survey.questions.create!(
+      content: "Rate your confidence in requirements gathering.",
+      question_type: "rating",
+      position: starting_position + 1,
+      required: true,
+      audience_branch: audience
+    )
+    questions << survey.questions.create!(
+      content: "What's the most important product metric you're tracking now?",
+      question_type: "text",
+      position: starting_position + 2,
+      required: false,
+      audience_branch: audience
+    )
+  else
+    raise "Unknown audience: #{audience}"
+  end
+
+  [questions.first, questions.last]
+end
+
+# 2) Create audience-specific blocks, tracking their first/last questions and positions
+audiences = ["Data Engineer", "Frontend Engineer", "Product Manager"]
+current_position = 2
+audience_first_last = {}
+
+audiences.each do |aud|
+  first_q, last_q = create_audience_block!(
+    survey: role_based_survey,
+    audience: aud,
+    starting_position: current_position
+  )
+  audience_first_last[aud] = { first: first_q, last: last_q }
+  current_position += 3 # we created 3 questions per audience above
+end
+
+# 3) Wire up branching: role selection -> first question of chosen audience
+role_branch_mapping = {}
+audience_first_last.each do |aud, pair|
+  role_branch_mapping[aud] = pair[:first].id.to_s
+end
+role_selector.update!(branch: role_branch_mapping.to_json)
+
+# 4) End each audience flow after its last question
+audience_first_last.each_value do |pair|
+  pair[:last].update!(branch: { "*" => "END" }.to_json)
+end
+
+puts "Role-based survey created with branching across audiences."

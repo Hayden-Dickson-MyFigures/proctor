@@ -15,6 +15,8 @@ class ResponsesController < ApplicationController
     # For checkbox questions, arrays are stringified to JSON for storage.
     if params[:response] && params[:response][:question_responses_attributes].present?
       question_attrs = params[:response][:question_responses_attributes]
+      branch = params[:response][:branch]
+      session_id = params[:response][:session_id]
       question_attrs.each do |qr|
         begin
           value = qr[:content]
@@ -23,7 +25,9 @@ class ResponsesController < ApplicationController
           created << Response.create!(
             survey_id: @survey.id,
             question_id: qr[:question_id],
-            value: value
+            value: value,
+            branch: branch,
+            session_id: session_id
           )
         rescue => e
           # Collect any error so we can report all failures together
@@ -59,6 +63,6 @@ class ResponsesController < ApplicationController
   private
   
   def response_params
-    params.require(:response).permit(:survey_id, :question_id, :value)
+    params.require(:response).permit(:survey_id, :question_id, :value, :branch, :session_id)
   end
 end

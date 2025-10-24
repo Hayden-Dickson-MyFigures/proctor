@@ -49,9 +49,9 @@ class QuestionsController < ApplicationController
   end
   
   def question_params
-    params.require(:question).permit(:content, :question_type, :position, :required, :branch, options: [])
+    params.require(:question).permit(:content, :question_type, :position, :required, :branch, :audience_branch, options: [])
   end
-  
+  #Adding branching functionality
   def process_options
     if params[:question][:options].present? && ['multiple_choice', 'checkbox'].include?(@question.question_type)
       # Split the options by newline and remove any blank lines
